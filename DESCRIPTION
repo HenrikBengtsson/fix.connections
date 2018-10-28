@@ -1,0 +1,11 @@
+Package: fix.connections
+Version: 0.0.0-9000
+Title: Workarounds for Deficiencies in R's Built-in Connections
+Description: An API that fixes some of the undesirable features of the built-in connection API in R.
+Authors@R: c(
+   person("Henrik", "Bengtsson", role=c("aut", "cre", "cph"),
+          email = "henrikb@braju.com"))
+License: GPL (>= 3)
+Imports:
+    digest
+RoxygenNote: 6.1.0
