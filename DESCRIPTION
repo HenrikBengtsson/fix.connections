@@ -7,5 +7,5 @@ Authors@R: c(
           email = "henrikb@braju.com"))
 License: GPL (>= 3)
 Imports:
-    digest
+    utils
 RoxygenNote: 6.1.0

@@ -1,79 +1,46 @@
+#' Gets the internal ID of a connection
+#'
+#' @param con A [base::connection].
+#'
+#' @return A positive integer.
+#'
+#' @importFrom utils capture.output
 #' @export
-nbr_of_connections <- function() {
-  length(getAllConnections())
-}
-
-#' @export
-list_connections <- function() {
-  showConnections(all = TRUE)
-}
-
-#' @export
-get_connection <- function(what) {
-  if (inherits(what, "connection")) return(what)
+connectionId <- function(con) {
+  stop_if_not(inherits(con, "connection"))
   
-  stop_if_not(length(what) == 1L, !is.na(what))
-  if (is.numeric(what)) what <- as.integer(what)
+  ## stdin, stdout, or stderr?
+  index <- as.integer(con)
+  if (index <= 2) return(index)
 
-  if (is.integer(what)) {
-    if (what < 0L || what > nbr_of_connections() - 1L) {
-      stopf("Connection index 'what' out of range [0,%d]: %s",
-            nbr_of_connections() - 1L, what)
-    }
-  } else {
-    stop("Unknown type of argument 'what': ", mode(what))
-  }
+  id <- attr(con, "conn_id")
+  id <- capture.output(print(id))
+  id <- gsub("(<pointer:| |>)", "", id)
+  id <- strtoi(id, base = 16L)
   
-  getConnection(what)
-}
-
-#' @export
-get_annotated_connection <- function(what) {
-  if (inherits(what, "annotated_connection")) return(what)
-  con <- get_connection(what)
-  structure(con, details = connection_details(con),
-                 class = c("annotated_connection", class(con)))
+  id
 }
 
 
-#' @importFrom digest digest
+#' Gets a string summary of a connection
+#'
+#' @param con A [base::connection].
+#'
+#' @return A character string.
+#'
 #' @export
-connection_details <- function(con, drop = "opened", fix_names = TRUE) {
-  if (inherits(con, "annotated_connection")) {
-    details <- attr(con, "details")
-    stop_if_not(is.list(details))
-  } else {
-    con <- get_connection(con)
-    index <- as.integer(con)
-    if (index > nbr_of_connections() - 1L) {
-      stopf("No such connection: index out of range [0,%d]: %d", nbr_of_connections() - 1L, index)
-    }
+connectionInfo <- function(con) {
+  index <- as.integer(con)
+  if (is.element(index, getAllConnections())) {
     details <- summary(con)
-  
-    ## Generate ID checksum excluding 'opened' status
-    t <- details
-    t$opened <- NULL
-    id <- digest(t, algo = "crc32")
-    details <- c(list(index = index, id = id), details)
-  }
-  
-  names <- names(details)
-  if (fix_names) {
-    names <- gsub(" ", "_", names)
-    names(details) <- names
-  }
-  details <- details[setdiff(names, drop)]
-  structure(details, class = c("annotated_connection_details", class(details)))
-}
-
-#' @export
-connection_info <- function(con) {
-  if (inherits(con, "annotated_connection_details")) {
-    details <- con
   } else {
-    details <- connection_details(con)
+    details <- as.list(rep(NA_character_, times = 7L))
+    names(details) <- c("description", "class", "mode", "text", "opened", "can read", "can write")
   }
-  info <- sapply(details, FUN = paste0, collapse = " ")
+  details$id <- connectionId(con)
+  info <- unlist(lapply(details, FUN = function(x) {
+    if (is.character(x)) paste0('"', x, '"') else x
+  }), use.names = FALSE)
   info <- sprintf("%s=%s", names(details), info)
   info <- paste(info, collapse = ", ")
   info <- sprintf("connection: %s", info)
@@ -81,26 +48,36 @@ connection_info <- function(con) {
 }
 
 
+#' Checks whether a connection is valid or not
+#'
+#' @param con A [base::connection].
+#'
+#' @return Returns TRUE if the connection is valid, otherwise FALSE.
+#' If FALSE, the attribute `reason` explains why it is invalid.
+#'
 #' @export
-is_connection_valid <- function(con) {
-  res <- TRUE
+isValidConnection <- function(con) {
+  stop_if_not(inherits(con, "connection"))
+  index <- as.integer(con)
   
-  if (inherits(con, "annotated_connection")) {
-    details <- connection_details(con)
-    if (details$index > nbr_of_connections() - 1L) {
-      res <- FALSE
-      attr(res, "reason") <- sprintf("Connection index is out of range [0,%d]: %d", nbr_of_connections() - 1L, details$index)
-    } else {
-      index <- as.integer(con)
-      current_details <- connection_details(index)
-      res <- identical(details, current_details)
-      if (!isTRUE(res)) {
-        attr(res, "reason") <- sprintf("Connection (%s) is different from the currently registered R connection with index %d (%s)", connection_info(con), index, connection_info(current_details))
-      }
-    }
-  } else {
-    stop_if_not(inherits(con, "connection"))
+  ## stdin, stdout, or stderr?
+  if (index <= 2) return(TRUE)
+
+  ## No such connection index?
+  if (!is.element(index, getAllConnections())) {
+    res <- FALSE
+    attr(res, "reason") <- sprintf("Connection (%s) is no longer valid. There is currently no registered R connection with that index %d", connectionInfo(con), index)
+    return(res)
   }
-  
-  res
+
+  ## That connection is no longer registered?
+  current_con <- getConnection(index)
+  res <- identical(attr(con, "conn_id"), attr(current_con, "conn_id"))
+  if (!isTRUE(res)) {
+    attr(res, "reason") <- sprintf("Connection (%s) is no longer valid. It differ from the currently registered R connection with the same index %d (%s)", connectionInfo(con), index, connectionInfo(current_con))
+    return(res)
+  }
+
+  ## A valid connection
+  TRUE
 }
