@@ -15,6 +15,10 @@ connectionId <- function(con) {
 
   id <- attr(con, "conn_id")
   id <- capture.output(print(id))
+
+  ## Not sure how this can happen, but I've observed it /HB 2018-10-27
+  if (id == "<pointer: (nil)>") return(-1L)
+  
   id <- gsub("(<pointer:| |>)", "", id)
   id <- strtoi(id, base = 16L)
   
@@ -80,4 +84,20 @@ isValidConnection <- function(con) {
 
   ## A valid connection
   TRUE
+}
+
+
+#' Asserts that a connection is valid
+#'
+#' @param con A [base::connection].
+#'
+#' @return Nothing or produces an informative error if the connection
+#' is invalid.
+#'
+#' @export
+assertValidConnection <- function(con) {
+  isValid <- isValidConnection(con)
+  if (isTRUE(isValid)) return()
+  reason <- attr(isValid, "reason", exact = TRUE)
+  stop(reason)
 }
