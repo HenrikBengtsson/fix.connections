@@ -16,7 +16,7 @@ connectionId <- function(con) {
   id <- attr(con, "conn_id")
   id <- capture.output(print(id))
 
-  ## Not sure how this can happen, but I've observed it /HB 2018-10-27
+  ## If a 'connection' object has been serialized, we get a 'nil' pointer.
   if (id == "<pointer: (nil)>") return(-1L)
   
   id <- gsub("(<pointer:| |>)", "", id)
